@@ -1,0 +1,15 @@
+#!/usr/bin/env tm-env-bash
+
+_include .git.sh
+
+git status
+
+_read "WARNING: Are you sure you want to undo all files above and restore to HEAD? (hard reset) [y/N] :" yn
+case $yn in
+    'y' )
+        git reset HEAD --hard
+        ;;
+    * )
+        _fail "Reset aborted by user"
+        ;;        
+esac

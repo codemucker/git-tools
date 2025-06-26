@@ -1,0 +1,7 @@
+#!/usr/bin/env tm-env-bash
+
+#
+# Show basic short, status
+#
+
+git status --short

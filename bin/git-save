@@ -1,0 +1,25 @@
+#!/usr/bin/env tm-env-bash
+
+#
+# Stage all changed files, commit, and push
+#
+
+_include .git.sh
+
+changes="$(git status --short)"
+commit_msg="$@"
+
+_info "Staging, commit, and pushing $PWD"
+
+if [[ -n "$changes" ]]; then
+    git status --short
+    while [[ -z "$commit_msg" ]]; do
+        _read "Commit message:" commit_msg
+    done
+    git add .
+    git commit -m "$commit_msg"
+else    
+    echo "no changes to commit"
+fi
+
+git push

@@ -1,0 +1,63 @@
+#!/usr/bin/env tm-env-bash
+#
+# Run a git command on all child repos
+#
+
+_include .git.sh @tm/lib.args.sh
+
+declare -A args
+# Using --opts-* to capture the command and its arguments after '--'
+_parse_args \
+    --file "${BASH_SOURCE[0]}" \
+    --opt-command "|remainder|multi|greedy|short=c|required|long=command|value=COMMAND|desc=The command (with args) to run.|example='git status --short', 'git add .'" \
+    --opt-parallel "|short=p|flag|desc=Run in parallel. Will wait for all processes to complete" \
+    --opt-quiet "|short=q|flag|desc=Don't output the dir name" \
+    --result args \
+    -- "$@"
+
+[[ "${args[quiet]}" == "1" ]] && level=debug || level=info
+[[ "${args[parallel]}" == "1" ]] && parallel=1 || parallel=0
+
+declare -A GIT_COMMANDS=(\
+    [add]="git add" \
+    [amend]='git commit --amend' \
+    [ammend]='git commit --amend' \
+    [checkout]="git checkout" \
+    [commit]="git commit" \
+    [config]="git config" \
+    [diff]="git diff" \
+    [log]="git log" \
+    [push]="git push" \
+    [restore]="git restore" \
+    [save]="git-save" \
+    [show]="git show" \
+    [status]="git status" \
+)
+first_command="$(echo "${args['command']}" | cut -d ' ' -f1)"
+first_command_args="$(echo "${args['command']}" | cut -d ' ' -f2-)" 
+
+git_command="${GIT_COMMANDS["$first_command"]:-}"
+
+[[ -n "$git_command" ]] && command="$git_command $first_command_args" || command="${args['command']}"
+
+_debug "command=${args['command']}"
+
+find "$PWD" -type d -name ".git" -print0 | while IFS= read -r -d $'\0' git_dir; do
+    _pushd "$git_dir/.."
+        _log $level "in $PWD =>"
+        if git rev-parse --is-inside-work-tree &>/dev/null; then
+            if [[ $parallel == 1 ]]; then
+                eval "$command" &
+            else
+                eval "$command" || true
+            fi
+        fi    
+    _popd
+done
+
+
+if [[ $parallel == 1 ]]; then # wait for all background jobs to finish
+    _info "waiting for parallel jobs to complete..."
+    wait
+    _info "..complete"
+fi

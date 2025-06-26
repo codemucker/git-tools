@@ -1,0 +1,15 @@
+#!/usr/bin/env tm-env-bash
+
+_include .git.sh
+
+git status
+
+_read "WARNING: Are you sure you want to reset to HEAD, keeping all local changes? (soft reset) [y/N] :" yn
+case $yn in
+    'y' )
+        git reset HEAD --soft
+        ;;
+    * )
+        _fail "Reset aborted by user"
+        ;;
+esac

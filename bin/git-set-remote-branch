@@ -1,0 +1,24 @@
+#!/usr/bin/env tm-env-bash
+
+_include .git.sh
+
+new_branch="${1:-}"
+current_branch="$(git rev-parse --abbrev-ref HEAD)"
+
+currrent_tracking="$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo '')"
+
+if [[ -n "$currrent_tracking" ]]; then
+    echo "Currently tracking: $currrent_tracking"
+else
+    echo "Currently tracking: <none>"
+fi
+if [[ -z "$new_branch" ]]; then
+    _read "what remote branch do you want to track ($current_branch)? :" new_branch "$currrent_tracking"
+fi
+if [[ ! -z "$new_branch" ]]; then
+    echo "you can also: git push -u origin $current_branch:$new_branch"
+
+    git branch $current_branch --set-upstream-to origin/$new_branch
+else 
+    echo "no branch given, aborting"
+fi

@@ -1,0 +1,7 @@
+#!/usr/bin/env tm-env-bash
+#
+# Loop lthrough all the git repos in this directory and children, and show the branch
+#
+
+_include .git.sh
+git-each "$@" git branch

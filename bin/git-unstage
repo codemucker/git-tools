@@ -1,0 +1,19 @@
+#!/usr/bin/env tm-env-bash
+
+_include .git.sh
+
+unstage_files="${1:-}"
+if [[ -z "$unstage_files" ]]; then
+    echo "ERROR: Pass in a file or file pattern to unstage"
+    exit -1
+fi
+
+_read "are you sure you want to unstage ($unstage_files) [y/N] :" yn
+case $yn in
+    'y' )
+        git restore --staged $*
+        ;;
+    * )
+        _fail "Reset aborted by user"
+        ;;
+esac

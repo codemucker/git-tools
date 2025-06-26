@@ -1,0 +1,16 @@
+#!/usr/bin/env tm-env-bash
+
+#
+# Show basic info about the current git info
+#
+
+_include .git.sh
+
+echo "dir: $PWD"
+echo "   remote  : $(git remote -v | grep '(push)' | sed 's/[ ]\+/ /g')"
+echo "   branch  : $(git branch --show-current)"
+echo "   tracking: $(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo '<none>')"
+echo "   changes:"
+echo "      $(git status --short | sed 's/\n/\n      /g')"
+
+  
