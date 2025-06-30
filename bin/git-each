@@ -9,14 +9,17 @@ declare -A args
 # Using --opts-* to capture the command and its arguments after '--'
 _parse_args \
     --file "${BASH_SOURCE[0]}" \
-    --opt-command "|remainder|multi|greedy|short=c|required|long=command|value=COMMAND|desc=The command (with args) to run.|example='git status --short', 'git add .'" \
+    --opt-command "|remainder|multi|short=c|long=command|value=COMMAND|desc=The command (with args) to run.|example='git status --short', 'git add .'" \
     --opt-parallel "|short=p|flag|desc=Run in parallel. Will wait for all processes to complete" \
     --opt-quiet "|short=q|flag|desc=Don't output the dir name" \
+    --opt-dir "|short=d|desc=The directory to start from|default=." \
     --result args \
     -- "$@"
 
 [[ "${args[quiet]}" == "1" ]] && level=debug || level=info
 [[ "${args[parallel]}" == "1" ]] && parallel=1 || parallel=0
+
+root_dir="${args[dir]}"
 
 declare -A GIT_COMMANDS=(\
     [add]="git add" \
@@ -33,23 +36,43 @@ declare -A GIT_COMMANDS=(\
     [show]="git show" \
     [status]="git status" \
 )
-first_command="$(echo "${args['command']}" | cut -d ' ' -f1)"
+DEFAULT_CMD="pwd"
+first_command="$(echo "${args['command']:-$DEFAULT_CMD}" | cut -d ' ' -f1)"
 first_command_args="$(echo "${args['command']}" | cut -d ' ' -f2-)" 
 
 git_command="${GIT_COMMANDS["$first_command"]:-}"
 
-[[ -n "$git_command" ]] && command="$git_command $first_command_args" || command="${args['command']}"
+[[ -n "$git_command" ]] && command="$git_command $first_command_args" || command="${args['command']:-$DEFAULT_CMD}"
 
-_debug "command=${args['command']}"
+# common ignore dirs
+IGNORE_DIRS=(
+    "node_modules"
+    "build"
+    "dist"
+    "__pycache__"
+    "venv"
+    "env"
+    "coverage"
+)
 
-find "$PWD" -type d -name ".git" -print0 | while IFS= read -r -d $'\0' git_dir; do
-    _pushd "$git_dir/.."
+# Build the -o -name "dir" parts for the IGNORE_DIRS
+exclude_conditions=""
+for dir in "${IGNORE_DIRS[@]}"; do
+    exclude_conditions+=" -o -name \"$dir\" "
+done
+
+declare project_dir
+find "${root_dir}" -type d \
+    \( -name ".*" ${exclude_conditions} \) -prune \
+    -o -name ".git" -print0 | while IFS= read -r -d $'\0' git_dir; do
+    project_dir="$(dirname "$git_dir")"
+    _pushd "$project_dir"
         _log $level "in $PWD =>"
         if git rev-parse --is-inside-work-tree &>/dev/null; then
             if [[ $parallel == 1 ]]; then
-                eval "$command" &
+                ( eval "$command" ) &
             else
-                eval "$command" || true
+                ( eval "$command" || true )
             fi
         fi    
     _popd
