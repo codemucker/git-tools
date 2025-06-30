@@ -9,10 +9,11 @@ declare -A args
 # Using --opts-* to capture the command and its arguments after '--'
 _parse_args \
     --file "${BASH_SOURCE[0]}" \
-    --opt-command "|remainder|multi|short=c|long=command|value=COMMAND|desc=The command (with args) to run.|example='git status --short', 'git add .'" \
+    --opt-command "|remainder|multi|short=c|long=command|default=pwd|value=COMMAND|desc=The command (with args) to run.|example='git status --short', 'git add .'" \
     --opt-parallel "|short=p|flag|desc=Run in parallel. Will wait for all processes to complete" \
     --opt-quiet "|short=q|flag|desc=Don't output the dir name" \
     --opt-dir "|short=d|desc=The directory to start from|default=." \
+    --opt-hidden "|short=h|flag|desc=Include hidden directories in search." \
     --result args \
     -- "$@"
 
@@ -55,17 +56,8 @@ IGNORE_DIRS=(
     "coverage"
 )
 
-# Build the -o -name "dir" parts for the IGNORE_DIRS
-exclude_conditions=""
-for dir in "${IGNORE_DIRS[@]}"; do
-    exclude_conditions+=" -o -name \"$dir\" "
-done
-
-declare project_dir
-find "${root_dir}" -type d \
-    \( -name ".*" ${exclude_conditions} \) -prune \
-    -o -name ".git" -print0 | while IFS= read -r -d $'\0' git_dir; do
-    project_dir="$(dirname "$git_dir")"
+run_command_in_git_dir() {
+    local project_dir="$1"
     _pushd "$project_dir"
         _log $level "in $PWD =>"
         if git rev-parse --is-inside-work-tree &>/dev/null; then
@@ -74,9 +66,64 @@ find "${root_dir}" -type d \
             else
                 ( eval "$command" || true )
             fi
-        fi    
+        fi
     _popd
-done
+}
+
+# Always process the root directory itself, even if hidden
+if [[ -d "${root_dir}/.git" ]]; then
+    run_command_in_git_dir "${root_dir}"
+fi
+
+# Find git repos in subdirectories.
+# We list the contents of the root_dir and pass them to find. This avoids
+# the problem of `find` pruning the root_dir itself if it's hidden.
+shopt -s nullglob
+declare -a find_paths=("${root_dir}"/* "${root_dir}"/.[!.]* "${root_dir}"/..?*)
+shopt -u nullglob
+
+if [[ ${#find_paths[@]} -gt 0 ]]; then
+    declare -a search_dirs
+    for path in "${find_paths[@]}"; do
+        [[ -d "$path" ]] && search_dirs+=("$path")
+    done
+
+    if [[ ${#search_dirs[@]} -gt 0 ]]; then
+        declare -a find_cmd
+        find_cmd=(find "${search_dirs[@]}" -type d)
+
+        declare -a prune_expr
+        # Conditionally add pruning for hidden directories
+        if [[ "${args[hidden]}" != "1" ]]; then
+            # Prune hidden directories, but not .git itself
+            prune_expr+=(-name '.*' -a -not -name '.git')
+        fi
+
+        # Add other ignored directories to prune conditions
+        for dir in "${IGNORE_DIRS[@]}"; do
+            if [[ ${#prune_expr[@]} -gt 0 ]]; then
+                prune_expr+=(-o)
+            fi
+            prune_expr+=(-name "$dir")
+        done
+
+        if [[ ${#prune_expr[@]} -gt 0 ]]; then
+            find_cmd+=('(')
+            find_cmd+=("${prune_expr[@]}")
+            find_cmd+=(')')
+            find_cmd+=(-prune -o)
+        fi
+
+        find_cmd+=(-name ".git" -print0)
+
+        # Execute the find command and process the results
+        # We redirect stderr to /dev/null to suppress "Permission denied" errors
+        # for directories we can't read.
+        "${find_cmd[@]}" 2>/dev/null | while IFS= read -r -d $'\0' git_dir; do
+            run_command_in_git_dir "$(dirname "$git_dir")"
+        done
+    fi
+fi
 
 
 if [[ $parallel == 1 ]]; then # wait for all background jobs to finish
