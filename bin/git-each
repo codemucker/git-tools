@@ -1,4 +1,4 @@
-#!/usr/bin/env tm-env-bash
+#!/usr/bin/env env-tm-bash
 #
 # Run a git command on all child repos
 #
@@ -126,7 +126,7 @@ if [[ ${#find_paths[@]} -gt 0 ]]; then
 fi
 
 
-if [[ $parallel == 1 ]]; then # wait for all background jobs to finish
+if [[ "$parallel" == "1" ]]; then # wait for all background jobs to finish
     _info "waiting for parallel jobs to complete..."
     wait
     _info "..complete"
